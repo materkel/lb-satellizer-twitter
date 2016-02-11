@@ -1,71 +1,84 @@
-var request = require('request-promise');
-var qs = require('querystring');
+'use strict';
 
-module.exports = Twitter;
+const request = require('request-promise'),
+      qs = require('querystring');
 
-function Twitter (config) {
-	this.authType = 'oauth1';
-	this.userId = null;
-	this.userName = null;
-	this.userEmail = null;
-	this.consumerKey = config.consumerKey;
-	this.consumerSecret = config.consumerSecret;
-	this.callbackUrl = config.callbackUrl || null;
+module.exports = (config) => {
+	const authType = 'oauth1',
+        consumerKey = config.consumerKey,
+        consumerSecret = config.consumerSecret,
+        callbackUrl = config.callbackUrl || null,
 
-	this.requestTokenUrl = 'https://api.twitter.com/oauth/request_token';
-    this.accessTokenUrl = 'https://api.twitter.com/oauth/access_token';
-    this.profileUrl = 'https://api.twitter.com/1.1/users/show.json?user_id=';
-}
+        requestTokenUrl = 'https://api.twitter.com/oauth/request_token',
+        accessTokenUrl = 'https://api.twitter.com/oauth/access_token',
+        profileUrl = 'https://api.twitter.com/1.1/users/show.json?user_id=';
 
-Twitter.prototype.authorize = function(req) {
-	var self = this;
+	let userId = null,
+	    userName = null,
+	    userEmail = null;
 
-	var oauthData = {
-		consumer_key: self.consumerKey,
-		consumer_secret: self.consumerSecret
-	};
 
-	if (self.callbackUrl !== null) {
-		oauthData.callback = self.callbackUrl;
-	}
+  const retrieveProfile = (response) => {
+    const oauthData = {
+      consumer_key: consumerKey,
+      consumer_secret: consumerSecret,
+      oauth_token: response.oauth_token
+    };
+    return request({ url: `${profileUrl}${response.user_id}`, oauth: oauthData})
+      .then((res) => {
+        res = JSON.parse(res);
+        userId = res.id;
+        userName = res.name;
+        return true;
+      });
+  };
 
-	return request.post({ url: self.requestTokenUrl, oauth: oauthData })
-		.then(function(response) {
-			console.log(response);
-			return qs.parse(response);
-		});
-}; 
+  return {
+    getUserData: () => {
+      return {
+        userId,
+        userName,
+        userEmail
+      };
+    },
 
-Twitter.prototype.authenticate = function(req) {
-	var self = this;
-	var oauthData = {
-		consumer_key: self.consumerKey,
-		consumer_secret: self.consumerSecret,
-		token: req.body.oauth_token,
-		verifier: req.body.oauth_verifier
-	};
+    getAuthType: () => {
+      return authType;
+    },
 
-	return request.post({ url: self.accessTokenUrl, oauth: oauthData})
-		.then(function(response) {
-			return qs.parse(response);
-		})
-		.then(function(response) {
-			return self.retrieveProfile(response);
-		});
-};
+    authorize: (req) => {
+      let oauthData = {
+        consumer_key: consumerKey,
+        consumer_secret: consumerSecret
+      };
 
-Twitter.prototype.retrieveProfile = function(response) {
-	var self = this;
-	var oauthData = {
-		consumer_key: self.consumerKey,
-		consumer_secret: self.consumerSecret,
-		oauth_token: response.oauth_token
-	};
+      if (callbackUrl !== null) {
+        oauthData.callback = callbackUrl;
+      }
 
-	return request({ url: self.profileUrl+response.user_id, oauth: oauthData})
-		.then(function(response) {
-			self.userId = response.id;
-			self.userName = response.name;
-			return true;
-		});
+      return request
+        .post({ url: requestTokenUrl, oauth: oauthData })
+        .then((res) => {
+          return qs.parse(res);
+        });
+    },
+
+    authenticate: (req) => {
+      const oauthData = {
+        consumer_key: consumerKey,
+        consumer_secret: consumerSecret,
+        token: req.body.oauth_token,
+        verifier: req.body.oauth_verifier
+      };
+
+      return request
+        .post({ url: accessTokenUrl, oauth: oauthData})
+        .then((res) => {
+          return qs.parse(res);
+        })
+        .then((res) => {
+          return retrieveProfile(res);
+        });
+    }
+  };
 };
