@@ -29,6 +29,6 @@
   },
   "dependencies": {
     "querystring": "^0.2.0",
-    "request-promise": "^0.4.3"
+    "request-promise": "^2.0.1"
   }
 }
